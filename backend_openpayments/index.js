@@ -112,5 +112,5 @@ app.post("/finalizar-pago", async (req, res) => {
 });
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Servidor Open Payments corriendo en http://10.20.9.73:${PORT}`);
+  console.log(`🚀 Servidor Open Payments corriendo en http://10.215.89.27:${PORT}`);
 });
