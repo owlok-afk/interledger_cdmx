@@ -18,7 +18,7 @@ import QRCode from "react-native-qrcode-svg";
 
 // ⚠️ IMPORTANTE: Cambia esta IP por la IP de tu computadora donde corre el backend
 // Para encontrarla: En Windows usa "ipconfig", en Mac/Linux usa "ifconfig"
-const API_URL = "http://10.215.89.27:4000"; // Cambia por tu IP local
+const API_URL = "http://10.215.89.150:4000"; // Cambia por tu IP local
 
 export default function PagosQRScreen() {
   const [loading, setLoading] = useState(false);

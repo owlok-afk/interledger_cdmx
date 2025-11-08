@@ -13,7 +13,7 @@ import ProgramarScreen from "./screens/ProgramarScreen";
 import AsistenteScreen from "./screens/AsistenteScreen";
 
 const Stack = createNativeStackNavigator();
-const API_URL = "http://10.215.89.27:4000";
+const API_URL = "http://10.215.89.150:4000";
 
 function HomeScreen({ navigation }) {
   return (
