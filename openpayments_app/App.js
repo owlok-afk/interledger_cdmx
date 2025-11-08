@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { StyleSheet, Text, View, Button, ActivityIndicator, Linking, Alert } from "react-native";
 import axios from "axios";
 
-const API_URL = "http://192.168.37.51:4000";
+const API_URL = "http://10.20.9.73:4000";
 
 export default function App() {
   const [loading, setLoading] = useState(false);
