@@ -16,15 +16,12 @@ import axios from "axios";
 import { Camera, CameraView } from "expo-camera";
 import QRCode from "react-native-qrcode-svg";
 
-// ⚠️ IMPORTANTE: Cambia esta IP por la IP de tu computadora donde corre el backend
-// Para encontrarla: En Windows usa "ipconfig", en Mac/Linux usa "ifconfig"
-const API_URL = "http://192.168.1.229:4000"; // Cambia por tu IP local
+const API_URL = "http://192.168.1.229:4000";
 
 export default function PagosQRScreen() {
   const [loading, setLoading] = useState(false);
   const [grantUrl, setGrantUrl] = useState(null);
   
-  // Estados para QR
   const [showScanner, setShowScanner] = useState(false);
   const [showQRGenerator, setShowQRGenerator] = useState(false);
   const [hasPermission, setHasPermission] = useState(null);
@@ -33,7 +30,6 @@ export default function PagosQRScreen() {
   const [selectedAccount, setSelectedAccount] = useState("");
   const [qrData, setQrData] = useState(null);
 
-  // Solicitar permisos de cámara
   useEffect(() => {
     (async () => {
       const { status } = await Camera.requestCameraPermissionsAsync();
@@ -57,32 +53,44 @@ export default function PagosQRScreen() {
     }
   };
 
-  // Función para escanear QR
   const handleBarCodeScanned = ({ data }) => {
     if (!data) return;
     
     setShowScanner(false);
     try {
       const qrInfo = JSON.parse(data);
+      console.log('QR Escaneado:', qrInfo);
+      
+      // Guardar la información del QR escaneado
       setScannedData(qrInfo);
       
-      // Si el QR tiene monto, lo usa; si no, pide al usuario
       if (qrInfo.amount) {
+        // Si tiene monto, confirmar directamente
         setPaymentAmount(qrInfo.amount.toString());
         Alert.alert(
           "QR Escaneado",
-          `Cuenta: ${qrInfo.walletAddress}\nMonto: $${qrInfo.amount}`,
-          [{ text: "Confirmar Pago", onPress: () => procesarPagoQR(qrInfo.walletAddress, qrInfo.amount) }]
+          `Cuenta: ${qrInfo.walletAddress}\nMonto: $${qrInfo.amount} MXN`,
+          [
+            { text: "Cancelar", style: "cancel", onPress: () => setScannedData(null) },
+            { text: "Confirmar Pago", onPress: () => procesarPagoQR(qrInfo.walletAddress, qrInfo.amount) }
+          ]
         );
       } else {
-        Alert.alert("QR Escaneado", `Cuenta: ${qrInfo.walletAddress}\nIngresa el monto a pagar`);
+        // Si NO tiene monto, mostrar mensaje y dejar que aparezca el input
+        Alert.alert(
+          "QR Escaneado",
+          `Cuenta: ${qrInfo.walletAddress}\n\nIngresa el monto a pagar abajo.`
+        );
+        // Limpiar el monto para que se muestre el campo de input
+        setPaymentAmount("");
       }
     } catch (err) {
+      console.error('Error parseando QR:', err);
       Alert.alert("Error", "QR inválido. Debe contener JSON con walletAddress.");
+      setScannedData(null);
     }
   };
 
-  // Procesar pago desde QR - CORREGIDO para usar los parámetros correctos del backend
   const procesarPagoQR = async (wallet, amount) => {
     if (!amount || parseFloat(amount) <= 0) {
       Alert.alert("Error", "Ingresa un monto válido");
@@ -91,31 +99,33 @@ export default function PagosQRScreen() {
 
     setLoading(true);
     try {
-      // CORRECCIÓN: Usar los parámetros que el backend espera
+      console.log('Procesando pago QR:', { wallet, amount });
+      
       const res = await axios.post(`${API_URL}/pago`, {
-        monto: parseFloat(amount),  // El backend espera "monto", no "amount"
-        destinatario: wallet,       // El backend espera "destinatario", no "receiverWalletUrl"
-        concepto: "Pago con QR"     // Concepto descriptivo
+        monto: parseFloat(amount),
+        destinatario: wallet,
+        concepto: "Pago con QR"
       });
+      
+      console.log('Respuesta del servidor:', res.data);
       
       setGrantUrl(res.data.url);
       Alert.alert(
         "Pago Generado",
         `Monto: $${amount} MXN\nReceptor: ${wallet}\n\nAbre el enlace para autorizar`,
         [
-          { text: "Cancelar", style: "cancel" },
-          { text: "Abrir enlace", onPress: () => Linking.openURL(res.data.url) },
+          { text: "Más tarde", style: "cancel" },
+          { text: "Abrir ahora", onPress: () => Linking.openURL(res.data.url) },
         ]
       );
     } catch (err) {
-      console.error(err);
+      console.error('Error creando pago:', err);
       Alert.alert("Error", err.response?.data?.error || "No se pudo crear el pago QR");
     } finally {
       setLoading(false);
     }
   };
 
-  // Generar QR
   const generarQR = () => {
     if (!selectedAccount) {
       Alert.alert("Error", "Selecciona una cuenta");
@@ -150,7 +160,6 @@ export default function PagosQRScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.headerContainer}>
         <Text style={styles.headerIcon}>💳</Text>
         <Text style={styles.headerTitle}>Pagos con QR</Text>
@@ -168,7 +177,6 @@ export default function PagosQRScreen() {
           </View>
         )}
 
-        {/* Botones principales */}
         <View style={styles.buttonGroup}>
           <TouchableOpacity
             style={styles.mainButton}
@@ -189,9 +197,12 @@ export default function PagosQRScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Si hay pago escaneado y sin monto, permitir ingresar */}
-        {scannedData && !scannedData.amount && (
+        {/* Campo para ingresar monto cuando se escanea QR sin monto */}
+        {scannedData && !scannedData.amount && !grantUrl && (
           <View style={styles.amountContainer}>
+            <Text style={styles.qrInfoTitle}>📱 QR Escaneado</Text>
+            <Text style={styles.qrInfoWallet}>{scannedData.walletAddress}</Text>
+            
             <Text style={styles.inputLabel}>Ingresa el monto a pagar:</Text>
             <TextInput
               style={styles.input}
@@ -200,16 +211,28 @@ export default function PagosQRScreen() {
               value={paymentAmount}
               onChangeText={setPaymentAmount}
             />
-            <TouchableOpacity
-              style={styles.confirmButton}
-              onPress={() => procesarPagoQR(scannedData.walletAddress, paymentAmount)}
-            >
-              <Text style={styles.confirmButtonText}>Confirmar Pago</Text>
-            </TouchableOpacity>
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={[styles.confirmButton, styles.cancelButtonSecondary]}
+                onPress={() => {
+                  setScannedData(null);
+                  setPaymentAmount("");
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.confirmButton, { flex: 2 }]}
+                onPress={() => procesarPagoQR(scannedData.walletAddress, paymentAmount)}
+                disabled={!paymentAmount || parseFloat(paymentAmount) <= 0}
+              >
+                <Text style={styles.confirmButtonText}>Confirmar Pago</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
-        {/* Botón finalizar pago */}
         {grantUrl && (
           <View style={styles.finalizarContainer}>
             <View style={styles.alertBox}>
@@ -236,11 +259,21 @@ export default function PagosQRScreen() {
             >
               <Text style={styles.finalizeButtonText}>✅ Finalizar pago</Text>
             </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.cancelLinkButton}
+              onPress={() => {
+                setGrantUrl(null);
+                setScannedData(null);
+                setPaymentAmount("");
+              }}
+            >
+              <Text style={styles.cancelLinkText}>Cancelar pago</Text>
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
 
-      {/* 📷 Modal Escáner QR */}
       <Modal visible={showScanner} animationType="slide">
         <View style={styles.scannerContainer}>
           <CameraView
@@ -260,7 +293,6 @@ export default function PagosQRScreen() {
         </View>
       </Modal>
 
-      {/* 🎫 Modal Generador QR */}
       <Modal visible={showQRGenerator} animationType="slide">
         <ScrollView contentContainerStyle={styles.qrGeneratorContainer}>
           <View style={styles.modalHeader}>
@@ -416,9 +448,24 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 8,
     alignItems: "center",
+    flex: 1,
   },
   confirmButtonText: {
     color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  buttonRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  cancelButtonSecondary: {
+    backgroundColor: "#fff",
+    borderWidth: 2,
+    borderColor: "#dc3545",
+  },
+  cancelButtonText: {
+    color: "#dc3545",
     fontSize: 16,
     fontWeight: "bold",
   },
@@ -475,11 +522,21 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 8,
     alignItems: "center",
+    marginBottom: 10,
   },
   finalizeButtonText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "bold",
+  },
+  cancelLinkButton: {
+    padding: 10,
+    alignItems: "center",
+  },
+  cancelLinkText: {
+    color: "#dc3545",
+    fontSize: 14,
+    fontWeight: "600",
   },
   amountContainer: {
     marginTop: 20,
@@ -492,6 +549,20 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3
+  },
+  qrInfoTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 8,
+  },
+  qrInfoWallet: {
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 15,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0"
   },
   scannerContainer: {
     flex: 1,
