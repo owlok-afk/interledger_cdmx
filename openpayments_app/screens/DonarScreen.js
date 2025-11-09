@@ -14,7 +14,7 @@ import {
 import { FontAwesome } from "@expo/vector-icons";
 import axios from "axios";
 
-const API_URL = "http://10.215.89.150:4000";
+const API_URL = "http://192.168.1.229:4000";
 
 export default function DonarScreen({ navigation }) {
   const [loading, setLoading] = useState(false);

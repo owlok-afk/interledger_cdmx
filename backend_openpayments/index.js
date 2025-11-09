@@ -80,7 +80,8 @@ app.post("/pago", async (req, res) => {
 
     // Si no se proporciona monto, usar valor por defecto de 10 MXN
     const montoTransferencia = monto ? parseFloat(monto) : 10;
-    const montoEnCentavos = Math.round(montoTransferencia * 1000).toString();
+    // CORRECCIÓN: Multiplicar por 100 para MXN (assetScale: 2), no por 1000
+    const montoEnCentavos = Math.round(montoTransferencia * 100).toString();
 
     const client = await createAuthenticatedClient({
       walletAddressUrl: "https://ilp.interledger-test.dev/alex_saga",
@@ -170,8 +171,8 @@ app.post("/donar", async (req, res) => {
       return res.status(404).json({ error: "Causa no encontrada" });
     }
 
-    // Convertir monto a la escala correcta (multiplicar por 1000)
-    const montoEnCentavos = Math.round(parseFloat(monto) * 1000).toString();
+    // CORRECCIÓN: Multiplicar por 100 para MXN (assetScale: 2), no por 1000
+    const montoEnCentavos = Math.round(parseFloat(monto) * 100).toString();
 
     const client = await createAuthenticatedClient({
       walletAddressUrl: "https://ilp.interledger-test.dev/alex_saga",
@@ -312,5 +313,5 @@ app.post("/finalizar-pago", async (req, res) => {
 });
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Servidor Open Payments corriendo en http://10.215.89.150:${PORT}`);
+  console.log(`🚀 Servidor Open Payments corriendo en http://192.168.1.229:${PORT}`);
 });

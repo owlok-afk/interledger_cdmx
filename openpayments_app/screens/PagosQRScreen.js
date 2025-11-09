@@ -18,7 +18,7 @@ import QRCode from "react-native-qrcode-svg";
 
 // ⚠️ IMPORTANTE: Cambia esta IP por la IP de tu computadora donde corre el backend
 // Para encontrarla: En Windows usa "ipconfig", en Mac/Linux usa "ifconfig"
-const API_URL = "http://10.215.89.150:4000"; // Cambia por tu IP local
+const API_URL = "http://192.168.1.229:4000"; // Cambia por tu IP local
 
 export default function PagosQRScreen() {
   const [loading, setLoading] = useState(false);
@@ -71,7 +71,7 @@ export default function PagosQRScreen() {
         setPaymentAmount(qrInfo.amount.toString());
         Alert.alert(
           "QR Escaneado",
-          `Cuenta: ${qrInfo.walletAddress}\nMonto: ${qrInfo.amount}`,
+          `Cuenta: ${qrInfo.walletAddress}\nMonto: $${qrInfo.amount}`,
           [{ text: "Confirmar Pago", onPress: () => procesarPagoQR(qrInfo.walletAddress, qrInfo.amount) }]
         );
       } else {
@@ -82,7 +82,7 @@ export default function PagosQRScreen() {
     }
   };
 
-  // Procesar pago desde QR
+  // Procesar pago desde QR - CORREGIDO para usar los parámetros correctos del backend
   const procesarPagoQR = async (wallet, amount) => {
     if (!amount || parseFloat(amount) <= 0) {
       Alert.alert("Error", "Ingresa un monto válido");
@@ -91,15 +91,17 @@ export default function PagosQRScreen() {
 
     setLoading(true);
     try {
+      // CORRECCIÓN: Usar los parámetros que el backend espera
       const res = await axios.post(`${API_URL}/pago`, {
-        receiverWalletUrl: wallet,
-        amount: parseFloat(amount),
+        monto: parseFloat(amount),  // El backend espera "monto", no "amount"
+        destinatario: wallet,       // El backend espera "destinatario", no "receiverWalletUrl"
+        concepto: "Pago con QR"     // Concepto descriptivo
       });
       
       setGrantUrl(res.data.url);
       Alert.alert(
         "Pago Generado",
-        `Monto: ${amount}\nReceptor: ${wallet}\n\nAbre el enlace para autorizar`,
+        `Monto: $${amount} MXN\nReceptor: ${wallet}\n\nAbre el enlace para autorizar`,
         [
           { text: "Cancelar", style: "cancel" },
           { text: "Abrir enlace", onPress: () => Linking.openURL(res.data.url) },

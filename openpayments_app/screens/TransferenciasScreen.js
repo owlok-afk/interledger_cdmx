@@ -10,12 +10,45 @@ import {
   Alert,
   ScrollView,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Modal
 } from "react-native";
 import { FontAwesome } from "@expo/vector-icons";
 import axios from "axios";
 
-const API_URL = "http://10.215.89.150:4000";
+const API_URL = "http://192.168.1.229:4000";
+
+// Lista de contactos predefinidos
+const CONTACTOS = [
+  {
+    id: 1,
+    nombre: "Tienda 199",
+    wallet: "$ilp.interledger-test.dev/tienda_199",
+    icono: "🏪",
+    tipo: "Negocio"
+  },
+  {
+    id: 2,
+    nombre: "Itzel",
+    wallet: "$ilp.interledger-test.dev/itzel_12",
+    icono: "👩",
+    tipo: "Personal"
+  },
+  {
+    id: 3,
+    nombre: "Tienda Prueba",
+    wallet: "$ilp.interledger-test.dev/tienda_prueba",
+    icono: "🛒",
+    tipo: "Negocio"
+  },
+  {
+    id: 4,
+    nombre: "Eduardo",
+    wallet: "$ilp.interledger-test.dev/eduardo_99",
+    icono: "👨",
+    tipo: "Personal"
+  }
+];
 
 export default function TransferenciasScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
@@ -23,6 +56,14 @@ export default function TransferenciasScreen({ navigation }) {
   const [monto, setMonto] = useState("");
   const [destinatario, setDestinatario] = useState("");
   const [concepto, setConcepto] = useState("");
+  const [showContactos, setShowContactos] = useState(false);
+  const [contactoSeleccionado, setContactoSeleccionado] = useState(null);
+
+  const seleccionarContacto = (contacto) => {
+    setContactoSeleccionado(contacto);
+    setDestinatario(contacto.wallet);
+    setShowContactos(false);
+  };
 
   const crearTransferencia = async () => {
     // Validaciones
@@ -32,7 +73,7 @@ export default function TransferenciasScreen({ navigation }) {
     }
 
     if (!destinatario.trim()) {
-      Alert.alert("Error", "Por favor ingresa un destinatario.");
+      Alert.alert("Error", "Por favor selecciona un contacto o ingresa un destinatario.");
       return;
     }
 
@@ -48,7 +89,7 @@ export default function TransferenciasScreen({ navigation }) {
       
       Alert.alert(
         "Transferencia Iniciada",
-        `Transferencia de $${monto} MXN a ${destinatario}.\n\n¿Deseas abrir el enlace de autorización?`,
+        `Transferencia de $${monto} MXN a ${contactoSeleccionado?.nombre || destinatario}.\n\n¿Deseas abrir el enlace de autorización?`,
         [
           { text: "Más tarde", style: "cancel" },
           { text: "Abrir ahora", onPress: () => Linking.openURL(res.data.url) }
@@ -79,6 +120,7 @@ export default function TransferenciasScreen({ navigation }) {
               setDestinatario("");
               setConcepto("");
               setGrantUrl(null);
+              setContactoSeleccionado(null);
             }
           }
         ]
@@ -112,6 +154,61 @@ export default function TransferenciasScreen({ navigation }) {
 
         {/* Formulario */}
         <View style={styles.formContainer}>
+          {/* Destinatario - Selector de Contactos */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>
+              <FontAwesome name="user" size={14} color="#007AFF" /> Destinatario
+            </Text>
+            
+            {contactoSeleccionado ? (
+              <View style={styles.contactoSeleccionadoContainer}>
+                <View style={styles.contactoSeleccionado}>
+                  <Text style={styles.contactoIcono}>{contactoSeleccionado.icono}</Text>
+                  <View style={styles.contactoInfo}>
+                    <Text style={styles.contactoNombre}>{contactoSeleccionado.nombre}</Text>
+                    <Text style={styles.contactoWallet}>{contactoSeleccionado.wallet}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setContactoSeleccionado(null);
+                      setDestinatario("");
+                    }}
+                    disabled={loading}
+                  >
+                    <FontAwesome name="times-circle" size={24} color="#dc3545" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={styles.selectContactButton}
+                  onPress={() => setShowContactos(true)}
+                  disabled={loading}
+                >
+                  <FontAwesome name="address-book" size={20} color="#007AFF" />
+                  <Text style={styles.selectContactButtonText}>Seleccionar de mis contactos</Text>
+                  <FontAwesome name="chevron-right" size={16} color="#007AFF" />
+                </TouchableOpacity>
+                
+                <View style={styles.dividerContainer}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>o ingresa manualmente</Text>
+                  <View style={styles.dividerLine} />
+                </View>
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="$ilp.interledger-test.dev/usuario"
+                  value={destinatario}
+                  onChangeText={setDestinatario}
+                  editable={!loading}
+                  autoCapitalize="none"
+                />
+              </>
+            )}
+          </View>
+
           {/* Monto */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>
@@ -149,20 +246,6 @@ export default function TransferenciasScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Destinatario */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>
-              <FontAwesome name="user" size={14} color="#007AFF" /> Destinatario
-            </Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Nombre o ID del destinatario"
-              value={destinatario}
-              onChangeText={setDestinatario}
-              editable={!loading}
-            />
-          </View>
-
           {/* Concepto (Opcional) */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>
@@ -189,7 +272,9 @@ export default function TransferenciasScreen({ navigation }) {
               </View>
               <View style={styles.resumenRow}>
                 <Text style={styles.resumenLabel}>Destinatario:</Text>
-                <Text style={styles.resumenValue}>{destinatario}</Text>
+                <Text style={styles.resumenValue}>
+                  {contactoSeleccionado ? contactoSeleccionado.nombre : destinatario}
+                </Text>
               </View>
               {concepto && (
                 <View style={styles.resumenRow}>
@@ -267,6 +352,7 @@ export default function TransferenciasScreen({ navigation }) {
                   setMonto("");
                   setDestinatario("");
                   setConcepto("");
+                  setContactoSeleccionado(null);
                 }}
                 disabled={loading}
               >
@@ -284,6 +370,47 @@ export default function TransferenciasScreen({ navigation }) {
           </Text>
         </View>
       </ScrollView>
+
+      {/* Modal de Contactos */}
+      <Modal
+        visible={showContactos}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowContactos(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Seleccionar Contacto</Text>
+              <TouchableOpacity onPress={() => setShowContactos(false)}>
+                <FontAwesome name="times" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.contactosList}>
+              {CONTACTOS.map((contacto) => (
+                <TouchableOpacity
+                  key={contacto.id}
+                  style={styles.contactoItem}
+                  onPress={() => seleccionarContacto(contacto)}
+                >
+                  <View style={styles.contactoItemContent}>
+                    <Text style={styles.contactoItemIcono}>{contacto.icono}</Text>
+                    <View style={styles.contactoItemInfo}>
+                      <Text style={styles.contactoItemNombre}>{contacto.nombre}</Text>
+                      <Text style={styles.contactoItemWallet}>{contacto.wallet}</Text>
+                      <Text style={styles.contactoItemTipo}>
+                        <FontAwesome name="tag" size={10} color="#999" /> {contacto.tipo}
+                      </Text>
+                    </View>
+                    <FontAwesome name="chevron-right" size={20} color="#007AFF" />
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -341,6 +468,58 @@ const styles = StyleSheet.create({
   textArea: {
     height: 80,
     textAlignVertical: "top"
+  },
+  selectContactButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#fff",
+    borderWidth: 2,
+    borderColor: "#007AFF",
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 15
+  },
+  selectContactButtonText: {
+    flex: 1,
+    fontSize: 16,
+    color: "#007AFF",
+    fontWeight: "600",
+    marginLeft: 10
+  },
+  dividerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 10
+  },
+  contactoSeleccionadoContainer: {
+    marginBottom: 10
+  },
+  contactoSeleccionado: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#e3f2fd",
+    borderWidth: 2,
+    borderColor: "#007AFF",
+    borderRadius: 8,
+    padding: 15
+  },
+  contactoIcono: {
+    fontSize: 32,
+    marginRight: 15
+  },
+  contactoInfo: {
+    flex: 1
+  },
+  contactoNombre: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 2
+  },
+  contactoWallet: {
+    fontSize: 12,
+    color: "#666"
   },
   montosRapidos: {
     flexDirection: "row",
@@ -484,5 +663,64 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#666",
     lineHeight: 18
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end"
+  },
+  modalContainer: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "80%",
+    paddingBottom: 20
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0"
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#333"
+  },
+  contactosList: {
+    paddingHorizontal: 20
+  },
+  contactoItem: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+    paddingVertical: 15
+  },
+  contactoItemContent: {
+    flexDirection: "row",
+    alignItems: "center"
+  },
+  contactoItemIcono: {
+    fontSize: 36,
+    marginRight: 15
+  },
+  contactoItemInfo: {
+    flex: 1
+  },
+  contactoItemNombre: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 3
+  },
+  contactoItemWallet: {
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 3
+  },
+  contactoItemTipo: {
+    fontSize: 11,
+    color: "#999"
   }
 });
