@@ -116,13 +116,14 @@ export default function DonarScreen({ navigation }) {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.headerContainer}>
-        <Text style={styles.headerTitle}>💝 Causas para Donar</Text>
+        <FontAwesome name="heart" size={40} color="#007AFF" />
+        <Text style={styles.headerTitle}>Causas para Donar</Text>
         <Text style={styles.headerSubtitle}>Tu contribución hace la diferencia</Text>
       </View>
 
       {loading && (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#28a745" />
+          <ActivityIndicator size="large" color="#007AFF" />
           <Text style={styles.loadingText}>Cargando causas...</Text>
         </View>
       )}
@@ -130,16 +131,43 @@ export default function DonarScreen({ navigation }) {
       {/* Botón para finalizar donación si hay grant pendiente */}
       {grantUrl && (
         <View style={styles.finalizarContainer}>
-          <Text style={styles.finalizarTexto}>
-            ¿Ya autorizaste la donación?
-          </Text>
+          <View style={styles.alertBox}>
+            <FontAwesome name="exclamation-circle" size={24} color="#ffc107" />
+            <Text style={styles.alertText}>
+              Donación pendiente de autorización
+            </Text>
+          </View>
+          
+          <TouchableOpacity
+            style={styles.linkButton}
+            onPress={() => Linking.openURL(grantUrl)}
+            disabled={loading}
+          >
+            <FontAwesome name="external-link" size={18} color="#007AFF" />
+            <Text style={[styles.buttonTextSecondary, { color: "#007AFF" }]}>
+              Abrir enlace de autorización
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>Ya autorizaste?</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
           <TouchableOpacity 
             style={styles.finalizarButton}
             onPress={finalizarDonacion}
             disabled={loading}
           >
-            <FontAwesome name="check-circle" size={20} color="#fff" />
-            <Text style={styles.finalizarButtonText}>Finalizar Donación</Text>
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <FontAwesome name="check-circle" size={18} color="#fff" />
+                <Text style={styles.finalizarButtonText}>Finalizar Donación</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
       )}
@@ -203,17 +231,18 @@ export default function DonarScreen({ navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <TouchableOpacity 
-              style={styles.closeButton}
-              onPress={() => setModalVisible(false)}
-            >
-              <FontAwesome name="times" size={24} color="#666" />
-            </TouchableOpacity>
-
-            <Text style={styles.modalTitle}>Realizar Donación</Text>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Realizar Donación</Text>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setModalVisible(false)}
+              >
+                <FontAwesome name="times" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
             
             {causaSeleccionada && (
-              <>
+              <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.modalCausaInfo}>
                   <Text style={styles.modalCausaIcono}>{causaSeleccionada.icono}</Text>
                   <Text style={styles.modalCausaNombre}>
@@ -221,7 +250,9 @@ export default function DonarScreen({ navigation }) {
                   </Text>
                 </View>
 
-                <Text style={styles.inputLabel}>Monto a donar (MXN):</Text>
+                <Text style={styles.inputLabel}>
+                  <FontAwesome name="dollar" size={14} color="#007AFF" /> Monto a donar (MXN)
+                </Text>
                 
                 {/* Botones de montos rápidos */}
                 <View style={styles.montosRapidos}>
@@ -267,7 +298,7 @@ export default function DonarScreen({ navigation }) {
                     <Text style={styles.buttonText}>Donar ${montoDonacion || "0"}</Text>
                   </TouchableOpacity>
                 </View>
-              </>
+              </ScrollView>
             )}
           </View>
         </View>
@@ -282,21 +313,22 @@ const styles = StyleSheet.create({
     backgroundColor: "#f2f2f2" 
   },
   headerContainer: {
-    backgroundColor: "#28a745",
-    padding: 20,
-    paddingTop: 15,
-    alignItems: "center"
+    backgroundColor: "#fff",
+    padding: 30,
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0"
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#fff",
+    color: "#333",
+    marginTop: 15,
     marginBottom: 5
   },
   headerSubtitle: {
     fontSize: 14,
-    color: "#fff",
-    opacity: 0.9
+    color: "#666"
   },
   loadingContainer: {
     padding: 30,
@@ -308,28 +340,65 @@ const styles = StyleSheet.create({
     fontSize: 14
   },
   finalizarContainer: {
+    margin: 20,
+    marginBottom: 0
+  },
+  alertBox: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#fff3cd",
     padding: 15,
-    margin: 15,
-    borderRadius: 10,
+    borderRadius: 8,
+    marginBottom: 15,
+    gap: 10,
     borderWidth: 1,
     borderColor: "#ffc107"
   },
-  finalizarTexto: {
+  alertText: {
+    flex: 1,
     fontSize: 14,
     color: "#856404",
-    marginBottom: 10,
-    textAlign: "center",
     fontWeight: "500"
+  },
+  linkButton: {
+    backgroundColor: "#fff",
+    borderWidth: 2,
+    borderColor: "#007AFF",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 15,
+    gap: 10
+  },
+  buttonTextSecondary: {
+    fontSize: 16,
+    fontWeight: "bold"
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 15
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#ddd"
+  },
+  dividerText: {
+    marginHorizontal: 10,
+    fontSize: 12,
+    color: "#666"
   },
   finalizarButton: {
     backgroundColor: "#28a745",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    padding: 12,
+    padding: 16,
     borderRadius: 8,
-    gap: 8
+    gap: 10
   },
   finalizarButtonText: {
     color: "#fff",
@@ -340,7 +409,7 @@ const styles = StyleSheet.create({
     flex: 1
   },
   scrollContent: {
-    padding: 15,
+    padding: 20,
     paddingBottom: 30
   },
   causaCard: {
@@ -389,7 +458,7 @@ const styles = StyleSheet.create({
   },
   progresoFill: {
     height: "100%",
-    backgroundColor: "#28a745",
+    backgroundColor: "#007AFF",
     borderRadius: 6
   },
   progresoInfo: {
@@ -404,11 +473,11 @@ const styles = StyleSheet.create({
   },
   progresoPorc: {
     fontSize: 12,
-    color: "#28a745",
+    color: "#007AFF",
     fontWeight: "bold"
   },
   donarButton: {
-    backgroundColor: "#28a745",
+    backgroundColor: "#007AFF",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -433,35 +502,41 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center"
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end"
   },
   modalContent: {
     backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 25,
-    width: "90%",
-    maxWidth: 400,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
     maxHeight: "80%"
   },
-  closeButton: {
-    alignSelf: "flex-end",
-    padding: 5
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0"
   },
   modalTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 20,
     color: "#333"
+  },
+  closeButton: {
+    padding: 5
   },
   modalCausaInfo: {
     alignItems: "center",
     marginBottom: 20,
-    padding: 15,
+    padding: 20,
     backgroundColor: "#f8f9fa",
-    borderRadius: 10
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e0e0e0"
   },
   modalCausaIcono: {
     fontSize: 50,
@@ -471,10 +546,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
     textAlign: "center",
-    color: "#28a745"
+    color: "#333"
   },
   inputLabel: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
     marginBottom: 10,
     color: "#333"
@@ -495,8 +570,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff"
   },
   montoRapidoSeleccionado: {
-    borderColor: "#28a745",
-    backgroundColor: "#e8f5e9"
+    borderColor: "#007AFF",
+    backgroundColor: "#e3f2fd"
   },
   montoRapidoText: {
     fontSize: 14,
@@ -504,7 +579,7 @@ const styles = StyleSheet.create({
     color: "#666"
   },
   montoRapidoTextSeleccionado: {
-    color: "#28a745"
+    color: "#007AFF"
   },
   input: {
     borderWidth: 1,
@@ -513,7 +588,8 @@ const styles = StyleSheet.create({
     padding: 15,
     fontSize: 16,
     marginBottom: 20,
-    backgroundColor: "#fff"
+    backgroundColor: "#fff",
+    color: "#333"
   },
   modalButtons: {
     flexDirection: "row",
@@ -522,7 +598,7 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     flex: 1,
-    padding: 15,
+    padding: 16,
     borderRadius: 8,
     alignItems: "center"
   },
@@ -530,11 +606,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#6c757d"
   },
   confirmarButton: {
-    backgroundColor: "#28a745"
+    backgroundColor: "#007AFF"
   },
   buttonText: {
     color: "#fff",
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "bold"
   }
 });

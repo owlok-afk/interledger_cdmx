@@ -149,70 +149,96 @@ export default function PagosQRScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>💳 Pagos con QR</Text>
-
-      {loading && <ActivityIndicator size="large" color="#007AFF" style={{ margin: 20 }} />}
-
-      {/* Botones principales */}
-      <View style={styles.buttonGroup}>
-        <TouchableOpacity
-          style={styles.mainButton}
-          onPress={() => setShowScanner(true)}
-          disabled={loading}
-        >
-          <Text style={styles.mainButtonText}>📷 Escanear QR para pagar</Text>
-        </TouchableOpacity>
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.headerContainer}>
+        <Text style={styles.headerIcon}>💳</Text>
+        <Text style={styles.headerTitle}>Pagos con QR</Text>
+        <Text style={styles.headerSubtitle}>Escanea o genera códigos QR para pagos</Text>
       </View>
 
-      <View style={styles.buttonGroup}>
-        <TouchableOpacity
-          style={[styles.mainButton, styles.secondaryButton]}
-          onPress={() => setShowQRGenerator(true)}
-          disabled={loading}
-        >
-          <Text style={styles.mainButtonText}>🎫 Generar mi QR</Text>
-        </TouchableOpacity>
-      </View>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={styles.loadingText}>Procesando...</Text>
+          </View>
+        )}
 
-      {/* Si hay pago escaneado y sin monto, permitir ingresar */}
-      {scannedData && !scannedData.amount && (
-        <View style={styles.amountContainer}>
-          <Text style={styles.label}>Ingresa el monto a pagar:</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Ejemplo: 50"
-            keyboardType="numeric"
-            value={paymentAmount}
-            onChangeText={setPaymentAmount}
-          />
-          <TouchableOpacity
-            style={styles.confirmButton}
-            onPress={() => procesarPagoQR(scannedData.walletAddress, paymentAmount)}
-          >
-            <Text style={styles.confirmButtonText}>Confirmar Pago</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Botón finalizar pago */}
-      {grantUrl && (
+        {/* Botones principales */}
         <View style={styles.buttonGroup}>
           <TouchableOpacity
-            style={styles.linkButton}
-            onPress={() => Linking.openURL(grantUrl)}
-          >
-            <Text style={styles.linkButtonText}>Abrir enlace de autorización</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.finalizeButton}
-            onPress={finalizarPago}
+            style={styles.mainButton}
+            onPress={() => setShowScanner(true)}
             disabled={loading}
           >
-            <Text style={styles.finalizeButtonText}>✅ Finalizar pago</Text>
+            <Text style={styles.mainButtonText}>📷 Escanear QR para pagar</Text>
           </TouchableOpacity>
         </View>
-      )}
+
+        <View style={styles.buttonGroup}>
+          <TouchableOpacity
+            style={[styles.mainButton, styles.secondaryButton]}
+            onPress={() => setShowQRGenerator(true)}
+            disabled={loading}
+          >
+            <Text style={styles.mainButtonText}>🎫 Generar mi QR</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Si hay pago escaneado y sin monto, permitir ingresar */}
+        {scannedData && !scannedData.amount && (
+          <View style={styles.amountContainer}>
+            <Text style={styles.inputLabel}>Ingresa el monto a pagar:</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Ejemplo: 50"
+              keyboardType="numeric"
+              value={paymentAmount}
+              onChangeText={setPaymentAmount}
+            />
+            <TouchableOpacity
+              style={styles.confirmButton}
+              onPress={() => procesarPagoQR(scannedData.walletAddress, paymentAmount)}
+            >
+              <Text style={styles.confirmButtonText}>Confirmar Pago</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Botón finalizar pago */}
+        {grantUrl && (
+          <View style={styles.finalizarContainer}>
+            <View style={styles.alertBox}>
+              <Text style={styles.alertText}>⚠️ Pago pendiente de autorización</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.linkButton}
+              onPress={() => Linking.openURL(grantUrl)}
+            >
+              <Text style={styles.linkButtonText}>Abrir enlace de autorización</Text>
+            </TouchableOpacity>
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>Ya autorizaste?</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <TouchableOpacity
+              style={styles.finalizeButton}
+              onPress={finalizarPago}
+              disabled={loading}
+            >
+              <Text style={styles.finalizeButtonText}>✅ Finalizar pago</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </ScrollView>
 
       {/* 📷 Modal Escáner QR */}
       <Modal visible={showScanner} animationType="slide">
@@ -237,9 +263,22 @@ export default function PagosQRScreen() {
       {/* 🎫 Modal Generador QR */}
       <Modal visible={showQRGenerator} animationType="slide">
         <ScrollView contentContainerStyle={styles.qrGeneratorContainer}>
-          <Text style={styles.modalTitle}>Generar Código QR</Text>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Generar Código QR</Text>
+            <TouchableOpacity 
+              style={styles.closeButtonModal}
+              onPress={() => {
+                setShowQRGenerator(false);
+                setQrData(null);
+                setPaymentAmount("");
+                setSelectedAccount("");
+              }}
+            >
+              <Text style={styles.closeButtonModalText}>✕</Text>
+            </TouchableOpacity>
+          </View>
           
-          <Text style={styles.label}>Selecciona tu cuenta:</Text>
+          <Text style={styles.inputLabel}>Selecciona tu cuenta:</Text>
           <View style={styles.accountButtons}>
             <TouchableOpacity
               style={[
@@ -268,7 +307,7 @@ export default function PagosQRScreen() {
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.label}>Monto (opcional, para pagos fijos):</Text>
+          <Text style={styles.inputLabel}>Monto (opcional, para pagos fijos):</Text>
           <TextInput
             style={styles.input}
             placeholder="Deja vacío para monto libre"
@@ -288,180 +327,159 @@ export default function PagosQRScreen() {
               {paymentAmount && <Text style={styles.qrInfo}>Monto: ${paymentAmount}</Text>}
             </View>
           )}
-
-          <TouchableOpacity
-            style={[styles.closeButton, { position: 'relative', marginTop: 20 }]}
-            onPress={() => {
-              setShowQRGenerator(false);
-              setQrData(null);
-              setPaymentAmount("");
-              setSelectedAccount("");
-            }}
-          >
-            <Text style={styles.closeButtonText}>❌ Cerrar</Text>
-          </TouchableOpacity>
         </ScrollView>
       </Modal>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flexGrow: 1,
+    flex: 1,
     backgroundColor: "#f2f2f2",
-    padding: 20,
   },
-  title: {
-    fontSize: 26,
+  headerContainer: {
+    backgroundColor: "#fff",
+    padding: 30,
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0"
+  },
+  headerIcon: {
+    fontSize: 40,
+    marginBottom: 10
+  },
+  headerTitle: {
+    fontSize: 24,
     fontWeight: "bold",
-    marginBottom: 30,
-    textAlign: "center",
     color: "#333",
+    marginBottom: 5
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: "#666"
+  },
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 30
+  },
+  loadingContainer: {
+    padding: 30,
+    alignItems: "center"
+  },
+  loadingText: {
+    marginTop: 10,
+    color: "#666",
+    fontSize: 14
   },
   buttonGroup: {
-    marginTop: 15,
+    marginBottom: 15,
     width: "100%",
   },
   mainButton: {
     backgroundColor: "#007AFF",
     padding: 18,
-    borderRadius: 12,
+    borderRadius: 8,
     alignItems: "center",
-    elevation: 3,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3
   },
   secondaryButton: {
-    backgroundColor: "#34C759",
+    backgroundColor: "#007AFF",
   },
   mainButtonText: {
     color: "#fff",
-    fontSize: 18,
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  inputLabel: {
+    fontSize: 14,
     fontWeight: "600",
+    marginBottom: 10,
+    color: "#333"
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 15,
+    fontSize: 16,
+    backgroundColor: "#fff",
+    color: "#333"
   },
   confirmButton: {
     backgroundColor: "#007AFF",
     padding: 15,
-    borderRadius: 10,
+    borderRadius: 8,
     alignItems: "center",
   },
   confirmButtonText: {
     color: "#fff",
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "bold",
+  },
+  finalizarContainer: {
+    marginTop: 20,
+  },
+  alertBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff3cd",
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: "#ffc107"
+  },
+  alertText: {
+    flex: 1,
+    fontSize: 14,
+    color: "#856404",
+    fontWeight: "500"
   },
   linkButton: {
-    backgroundColor: "#5856D6",
+    backgroundColor: "#fff",
+    borderWidth: 2,
+    borderColor: "#007AFF",
     padding: 15,
-    borderRadius: 10,
+    borderRadius: 8,
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 15,
   },
   linkButtonText: {
-    color: "#fff",
+    color: "#007AFF",
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "bold",
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 15
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#ddd"
+  },
+  dividerText: {
+    marginHorizontal: 10,
+    fontSize: 12,
+    color: "#666"
   },
   finalizeButton: {
-    backgroundColor: "#34C759",
-    padding: 15,
-    borderRadius: 10,
+    backgroundColor: "#28a745",
+    padding: 16,
+    borderRadius: 8,
     alignItems: "center",
   },
   finalizeButtonText: {
     color: "#fff",
     fontSize: 16,
-    fontWeight: "600",
-  },
-  scannerContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#000",
-  },
-  qrGeneratorContainer: {
-    flexGrow: 1,
-    padding: 20,
-    backgroundColor: "#fff",
-  },
-  modalTitle: {
-    fontSize: 24,
     fontWeight: "bold",
-    marginBottom: 20,
-    textAlign: "center",
-    color: "#333",
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginTop: 15,
-    marginBottom: 8,
-    color: "#333",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 15,
-    fontSize: 16,
-    backgroundColor: "#fff",
-  },
-  accountButtons: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 15,
-  },
-  accountButton: {
-    padding: 18,
-    backgroundColor: "#e0e0e0",
-    borderRadius: 12,
-    flex: 1,
-    marginHorizontal: 5,
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
-  accountButtonSelected: {
-    backgroundColor: "#007AFF",
-    borderColor: "#0051D5",
-  },
-  accountButtonText: {
-    textAlign: "center",
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
-  },
-  accountButtonTextSelected: {
-    color: "#fff",
-  },
-  generateButton: {
-    backgroundColor: "#007AFF",
-    padding: 16,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  generateButtonText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  qrDisplay: {
-    alignItems: "center",
-    marginTop: 20,
-    padding: 20,
-    backgroundColor: "#f9f9f9",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-  },
-  qrInfo: {
-    marginTop: 10,
-    fontSize: 14,
-    color: "#555",
-    textAlign: "center",
   },
   amountContainer: {
     marginTop: 20,
@@ -469,11 +487,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 12,
     width: "100%",
-    elevation: 2,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  scannerContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#000",
   },
   closeButton: {
     position: "absolute",
@@ -487,5 +511,86 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "bold",
+  },
+  qrGeneratorContainer: {
+    flexGrow: 1,
+    padding: 20,
+    backgroundColor: "#fff",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0"
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#333"
+  },
+  closeButtonModal: {
+    padding: 5
+  },
+  closeButtonModalText: {
+    fontSize: 24,
+    color: "#666"
+  },
+  accountButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 15,
+    gap: 8
+  },
+  accountButton: {
+    padding: 18,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    flex: 1,
+    borderWidth: 2,
+    borderColor: "#ddd",
+    alignItems: "center"
+  },
+  accountButtonSelected: {
+    backgroundColor: "#e3f2fd",
+    borderColor: "#007AFF",
+  },
+  accountButtonText: {
+    textAlign: "center",
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#666",
+  },
+  accountButtonTextSelected: {
+    color: "#007AFF",
+  },
+  generateButton: {
+    backgroundColor: "#007AFF",
+    padding: 16,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  generateButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  qrDisplay: {
+    alignItems: "center",
+    marginTop: 20,
+    padding: 20,
+    backgroundColor: "#f8f9fa",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+  },
+  qrInfo: {
+    marginTop: 10,
+    fontSize: 14,
+    color: "#333",
+    textAlign: "center",
+    fontWeight: "600"
   },
 });
