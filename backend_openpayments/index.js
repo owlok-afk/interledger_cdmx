@@ -315,3 +315,121 @@ app.post("/finalizar-pago", async (req, res) => {
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Servidor Open Payments corriendo en http://192.168.1.229:${PORT}`);
 });
+
+// Agregar este nuevo endpoint DESPUÉS del endpoint /pago existente
+// Este es específico para el asistente de voz y NO afecta los otros endpoints
+
+app.post("/pago-voz", async (req, res) => {
+  try {
+    const { monto, destinatario, concepto } = req.body;
+
+    if (!monto || !destinatario) {
+      return res.status(400).json({ error: "Se requiere monto y destinatario" });
+    }
+
+    console.log('🎤 Pago por voz:', { monto, destinatario, concepto });
+
+    const montoTransferencia = parseFloat(monto);
+    const montoEnCentavos = Math.round(montoTransferencia * 100).toString();
+
+    const client = await createAuthenticatedClient({
+      walletAddressUrl: "https://ilp.interledger-test.dev/alex_saga",
+      privateKey: "./private.key",
+      keyId: "5739c44f-f712-4acf-afaa-d3b72aaa3e20",
+    });
+
+    // Wallet del que envía (tu cuenta)
+    const sendingWallet = await client.walletAddress.get({
+      url: "https://ilp.interledger-test.dev/remitente_saga",
+    });
+
+    // Wallet del destinatario (Eduardo o Streaming) - CONVERTIR DE PAYMENT POINTER A URL
+    const destinatarioUrl = destinatario.replace('$', 'https://');
+    console.log('📍 Destinatario URL:', destinatarioUrl);
+    
+    const receivingWallet = await client.walletAddress.get({
+      url: destinatarioUrl,
+    });
+
+    // Crear incoming payment en la cuenta del DESTINATARIO
+    const incomingPaymentGrant = await client.grant.request(
+      { url: receivingWallet.authServer },
+      { access_token: { access: [{ type: "incoming-payment", actions: ["read","create","complete"] }] } }
+    );
+
+    const incomingPayment = await client.incomingPayment.create(
+      { url: receivingWallet.resourceServer, accessToken: incomingPaymentGrant.access_token.value },
+      { 
+        walletAddress: receivingWallet.id, 
+        incomingAmount: { 
+          assetCode: receivingWallet.assetCode, 
+          assetScale: receivingWallet.assetScale, 
+          value: montoEnCentavos 
+        },
+        metadata: {
+          description: concepto || 'Pago por voz'
+        }
+      }
+    );
+
+    const quoteGrant = await client.grant.request(
+      { url: sendingWallet.authServer },
+      { access_token: { access: [{ type: "quote", actions: ["read","create"] }] } }
+    );
+
+    const quote = await client.quote.create(
+      { url: sendingWallet.resourceServer, accessToken: quoteGrant.access_token.value },
+      { walletAddress: sendingWallet.id, receiver: incomingPayment.id, method: "ilp" }
+    );
+
+    const outgoingPaymentGrant = await client.grant.request(
+      { url: sendingWallet.authServer },
+      {
+        access_token: {
+          access: [
+            {
+              type: "outgoing-payment",
+              actions: ["read","create"],
+              limits: { 
+                debitAmount: { 
+                  assetCode: quote.debitAmount.assetCode, 
+                  assetScale: quote.debitAmount.assetScale, 
+                  value: quote.debitAmount.value 
+                } 
+              },
+              identifier: sendingWallet.id,
+            },
+          ],
+        },
+        interact: { start: ["redirect"] },
+      }
+    );
+
+    lastOutgoingGrant = { 
+      client, 
+      outgoingPaymentGrant, 
+      sendingWallet, 
+      quote,
+      monto: montoTransferencia,
+      destinatario,
+      concepto,
+      tipo: 'voz' // Identificador para saber que viene del asistente de voz
+    };
+
+    console.log('✅ Pago por voz iniciado correctamente');
+
+    res.json({
+      message: `Transferencia de ${montoTransferencia} MXN iniciada a ${destinatario}`,
+      url: outgoingPaymentGrant.interact.redirect,
+      destinatario: destinatario
+    });
+
+  } catch (err) {
+    console.error("❌ Error en pago por voz:", err);
+    if (err instanceof OpenPaymentsClientError) {
+      res.status(400).json({ error: err.description || err.message });
+    } else {
+      res.status(500).json({ error: err.message });
+    }
+  }
+});

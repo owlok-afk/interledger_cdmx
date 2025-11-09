@@ -1,941 +1,1084 @@
-import React, { useState, useEffect } from "react";
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  TouchableOpacity,
-  ActivityIndicator, 
-  Linking, 
-  Alert,
-  ScrollView,
-  Modal,
-  Platform
-} from "react-native";
-import { FontAwesome } from "@expo/vector-icons";
-import axios from "axios";
-import Voice from '@react-native-voice/voice';
+import React, { useState, useEffect, useRef } from "react";
 
 const API_URL = "http://192.168.1.229:4000";
 
-// Comandos predefinidos con patrones de reconocimiento
+// Comandos con información de pago real
 const COMANDOS = [
   {
-    id: "netflix",
-    patrones: ["pagar netflix", "pago netflix", "netflix"],
-    nombre: "Netflix",
-    descripcion: "Pagar suscripción de Netflix",
-    monto: 199,
-    destinatario: "$ilp.interledger-test.dev/netflix_mx",
-    concepto: "Suscripción Netflix",
-    icono: "🎬"
-  },
-  {
-    id: "spotify",
-    patrones: ["pagar spotify", "pago spotify", "spotify"],
-    nombre: "Spotify",
-    descripcion: "Pagar suscripción de Spotify",
-    monto: 115,
-    destinatario: "$ilp.interledger-test.dev/spotify_mx",
-    concepto: "Suscripción Spotify",
-    icono: "🎵"
-  },
-  {
-    id: "luz",
-    patrones: ["pagar luz", "pago luz", "luz", "cfe"],
-    nombre: "CFE",
-    descripcion: "Pagar recibo de luz",
-    monto: 450,
-    destinatario: "$ilp.interledger-test.dev/cfe",
-    concepto: "Recibo de luz",
-    icono: "💡"
-  },
-  {
-    id: "agua",
-    patrones: ["pagar agua", "pago agua", "agua"],
-    nombre: "Agua",
-    descripcion: "Pagar recibo de agua",
-    monto: 180,
-    destinatario: "$ilp.interledger-test.dev/agua_municipal",
-    concepto: "Recibo de agua",
-    icono: "💧"
-  },
-  {
-    id: "receptor_saga",
-    patrones: ["transferir a receptor saga", "enviar a receptor saga", "pagar receptor saga", "receptor saga", "saga"],
-    nombre: "Receptor Saga",
-    descripcion: "Transferencia a receptor_saga",
+    id: "eduardo",
+    patrones: ["eduardo", "transferir eduardo", "enviar eduardo", "pagar eduardo"],
+    nombre: "Eduardo",
+    wallet: "$ilp.interledger-test.dev/eduardo_99",
     monto: 100,
-    destinatario: "$ilp.interledger-test.dev/receptor_saga",
-    concepto: "Transferencia",
-    icono: "👤"
+    icono: "👨",
+    tipo: "transferencia"
   },
   {
-    id: "tienda_199",
-    patrones: ["pagar tienda", "tienda 199", "tienda ciento noventa y nueve"],
-    nombre: "Tienda 199",
-    descripcion: "Pago en Tienda 199",
-    monto: 250,
-    destinatario: "$ilp.interledger-test.dev/tienda_199",
-    concepto: "Compra en tienda",
-    icono: "🏪"
-  },
-  {
-    id: "internet",
-    patrones: ["pagar internet", "pago internet", "internet", "telmex"],
-    nombre: "Internet",
-    descripcion: "Pagar servicio de Internet",
-    monto: 599,
-    destinatario: "$ilp.interledger-test.dev/telmex",
-    concepto: "Servicio de Internet",
-    icono: "📡"
-  },
-  {
-    id: "telefono",
-    patrones: ["pagar teléfono", "pago telefono", "teléfono", "telefono", "recarga", "recargar", "telcel"],
-    nombre: "Teléfono",
-    descripcion: "Recarga telefónica",
-    monto: 100,
-    destinatario: "$ilp.interledger-test.dev/telcel",
-    concepto: "Recarga telefónica",
-    icono: "📱"
+    id: "streaming",
+    patrones: ["streaming", "pagar streaming", "servicio streaming", "pago streaming"],
+    nombre: "Servicio Streaming",
+    wallet: "$ilp.interledger-test.dev/streaming_89",
+    monto: 150,
+    icono: "📺",
+    tipo: "servicio"
   }
 ];
 
-export default function AsistenteScreen({ navigation }) {
-  const [loading, setLoading] = useState(false);
-  const [grantUrl, setGrantUrl] = useState(null);
+export default function AsistenteVozWeb() {
   const [escuchando, setEscuchando] = useState(false);
   const [textoReconocido, setTextoReconocido] = useState("");
   const [comandoDetectado, setComandoDetectado] = useState(null);
-  const [showComandos, setShowComandos] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [historial, setHistorial] = useState([]);
-  const [voiceDisponible, setVoiceDisponible] = useState(false);
-  const [resultadosParciales, setResultadosParciales] = useState([]);
+  const [speechReady, setSpeechReady] = useState(false);
+  const [parcial, setParcial] = useState("");
+  const [error, setError] = useState("");
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [comandoPendiente, setComandoPendiente] = useState(null);
+  
+  // Estados para el proceso de pago
+  const [procesandoPago, setProcesandoPago] = useState(false);
+  const [grantUrl, setGrantUrl] = useState(null);
+  const [esperandoAutorizacion, setEsperandoAutorizacion] = useState(false);
+  const [pagoExitoso, setPagoExitoso] = useState(false);
+  
+  const recognitionRef = useRef(null);
 
+  // Inicializar Web Speech API
   useEffect(() => {
-    // Función async interna para inicializar Voice
-    const setupVoice = async () => {
-      try {
-        await initVoice();
-      } catch (error) {
-        console.error('Error en setup de Voice:', error);
-      }
-    };
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     
-    // Ejecutar setup
-    setupVoice();
-
-    // Cleanup al desmontar el componente
-    return () => {
-      Voice.destroy()
-        .then(() => {
-          Voice.removeAllListeners();
-        })
-        .catch(e => console.error('Error cleaning up Voice:', e));
-    };
-  }, []);
-
-  const initVoice = async () => {
-    try {
-      // Configurar eventos
-      Voice.onSpeechStart = onSpeechStart;
-      Voice.onSpeechEnd = onSpeechEnd;
-      Voice.onSpeechResults = onSpeechResults;
-      Voice.onSpeechPartialResults = onSpeechPartialResults;
-      Voice.onSpeechError = onSpeechError;
-
-      // Verificar disponibilidad
-      const disponible = await Voice.isAvailable();
-      setVoiceDisponible(disponible);
-      console.log('Voice disponible:', disponible);
-
-      if (!disponible) {
-        Alert.alert(
-          "Reconocimiento de Voz No Disponible",
-          "Tu dispositivo no soporta reconocimiento de voz o no tienes permisos de micrófono.\n\nPuedes usar la selección manual de comandos.",
-          [{ text: "Entendido" }]
-        );
-      }
-    } catch (error) {
-      console.error('Error inicializando Voice:', error);
-      setVoiceDisponible(false);
-      Alert.alert(
-        "Error de Configuración",
-        "No se pudo inicializar el reconocimiento de voz.\n\n¿Estás usando Expo Go? Este módulo requiere un development build.\n\nEjecuta: npx expo run:android",
-        [{ text: "Entendido" }]
-      );
-    }
-  };
-
-  const onSpeechStart = (e) => {
-    console.log('Reconocimiento iniciado', e);
-    setResultadosParciales([]);
-  };
-
-  const onSpeechEnd = (e) => {
-    console.log('Reconocimiento finalizado', e);
-    setEscuchando(false);
-  };
-
-  const onSpeechPartialResults = (e) => {
-    console.log('Resultados parciales:', e.value);
-    if (e.value && e.value.length > 0) {
-      setResultadosParciales(e.value);
-      setTextoReconocido(e.value[0]);
-    }
-  };
-
-  const onSpeechResults = (e) => {
-    console.log('Resultados finales:', e.value);
-    if (e.value && e.value.length > 0) {
-      const texto = e.value[0];
-      setTextoReconocido(texto);
-      procesarComando(texto);
-    } else {
-      Alert.alert("Sin Resultados", "No se pudo reconocer ningún comando. Intenta de nuevo.");
-    }
-  };
-
-  const onSpeechError = (e) => {
-    console.error('Error en reconocimiento:', e);
-    setEscuchando(false);
-    
-    let mensaje = "No se pudo reconocer el comando.";
-    if (e.error?.message) {
-      mensaje += `\n\nDetalle: ${e.error.message}`;
-    }
-    
-    Alert.alert("Error", mensaje + "\n\nPuedes seleccionar un comando de la lista.");
-  };
-
-  const iniciarEscucha = async () => {
-    if (!voiceDisponible) {
-      Alert.alert(
-        "Función No Disponible",
-        "El reconocimiento de voz no está disponible.\n\n¿Estás usando Expo Go? Necesitas ejecutar:\nnpx expo run:android\n\nMientras tanto, usa la selección manual de comandos.",
-        [{ text: "Ver Comandos", onPress: () => setShowComandos(true) }]
-      );
+    if (!SpeechRecognition) {
+      setError("Web Speech API no disponible en este navegador. Intenta con Chrome o Safari.");
       return;
     }
 
-    try {
-      // Cancelar cualquier sesión previa
-      await Voice.cancel();
-      
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'es-MX';
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
       setEscuchando(true);
-      setTextoReconocido("Escuchando...");
-      setResultadosParciales([]);
-      
-      await Voice.start('es-MX');
-    } catch (error) {
-      console.error('Error al iniciar Voice:', error);
+      setParcial("Escuchando...");
+      setError("");
+    };
+
+    recognition.onresult = (event) => {
+      const result = event.results[event.results.length - 1];
+      const transcript = result[0].transcript;
+      const isFinal = result.isFinal;
+
+      if (isFinal) {
+        setTextoReconocido(transcript);
+        setParcial("");
+        procesarComando(transcript);
+      } else {
+        setParcial(transcript);
+      }
+    };
+
+    recognition.onerror = (event) => {
       setEscuchando(false);
-      Alert.alert(
-        "Error al Iniciar",
-        "No se pudo iniciar el reconocimiento de voz.\n\nVerifica los permisos de micrófono en la configuración de tu dispositivo.",
-        [{ text: "Entendido" }]
-      );
+      setParcial("");
+      
+      let mensaje = "Error al reconocer voz";
+      if (event.error === 'no-speech') {
+        mensaje = "No se detectó voz. Intenta de nuevo.";
+      } else if (event.error === 'not-allowed') {
+        mensaje = "Permiso de micrófono denegado. Habilita el micrófono en tu navegador.";
+      } else if (event.error === 'network') {
+        mensaje = "Error de red. Verifica tu conexión.";
+      }
+      
+      setError(mensaje);
+    };
+
+    recognition.onend = () => {
+      setEscuchando(false);
+      setParcial("");
+    };
+
+    recognitionRef.current = recognition;
+    setSpeechReady(true);
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+    };
+  }, []);
+
+  const iniciarEscucha = () => {
+    if (!speechReady || !recognitionRef.current) {
+      setError("Reconocimiento de voz no disponible");
+      return;
+    }
+    
+    setParcial("");
+    setTextoReconocido("");
+    setComandoDetectado(null);
+    setError("");
+    
+    try {
+      recognitionRef.current.start();
+    } catch (err) {
+      if (err.name !== 'InvalidStateError') {
+        setError("Error al iniciar reconocimiento");
+      }
     }
   };
 
-  const detenerEscucha = async () => {
-    try {
-      await Voice.stop();
-      setEscuchando(false);
-    } catch (error) {
-      console.error('Error al detener Voice:', error);
-      setEscuchando(false);
+  const detenerEscucha = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+  };
+
+  const hablar = (texto) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(texto);
+      utterance.lang = 'es-MX';
+      utterance.rate = 0.9;
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
     }
   };
 
   const procesarComando = (texto) => {
     const textoNormalizado = texto.toLowerCase().trim();
-    console.log('Procesando comando:', textoNormalizado);
     
-    // Buscar comando que coincida
     const comando = COMANDOS.find(cmd => 
-      cmd.patrones.some(patron => textoNormalizado.includes(patron.toLowerCase()))
+      cmd.patrones.some(patron => textoNormalizado.includes(patron))
     );
 
     if (comando) {
       setComandoDetectado(comando);
-      
-      Alert.alert(
-        "Comando Reconocido ✅",
-        `${comando.icono} ${comando.nombre}\nMonto: $${comando.monto} MXN\n\n¿Deseas procesar este pago?`,
-        [
-          { 
-            text: "Cancelar", 
-            style: "cancel",
-            onPress: () => setComandoDetectado(null)
-          },
-          { 
-            text: "Confirmar", 
-            onPress: () => ejecutarComando(comando)
-          }
-        ]
-      );
+      setComandoPendiente(comando);
+      setShowConfirm(true);
+      hablar(`Comando reconocido: ${comando.nombre}. Monto: ${comando.monto} pesos.`);
     } else {
-      Alert.alert(
-        "Comando No Reconocido ❌",
-        `Dijiste: "${texto}"\n\nIntenta con:\n• Pagar Netflix\n• Pagar luz\n• Transferir a receptor saga\n\nO selecciona un comando de la lista.`,
-        [
-          { text: "Reintentar", onPress: () => iniciarEscucha() },
-          { text: "Ver Lista", onPress: () => setShowComandos(true) }
-        ]
-      );
-      setComandoDetectado(null);
+      setError(`No se reconoció el comando: "${texto}"`);
+      hablar("No entendí el comando. Intenta de nuevo o selecciona de la lista.");
     }
   };
 
-  const ejecutarComando = async (comando) => {
-    setLoading(true);
+  // Función para crear el pago usando Open Payments API
+  const crearPago = async (comando) => {
+    setProcesandoPago(true);
+    setError("");
     
     try {
-      const res = await axios.post(`${API_URL}/pago`, {
+      hablar(`Iniciando pago de ${comando.monto} pesos a ${comando.nombre}`);
+      
+      console.log('📤 Enviando pago:', {
         monto: comando.monto,
-        destinatario: comando.destinatario,
-        concepto: comando.concepto
+        destinatario: comando.wallet,
+        concepto: `Pago por voz - ${comando.nombre}`
       });
       
-      setGrantUrl(res.data.url);
+      const response = await fetch(`${API_URL}/pago-voz`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          monto: comando.monto,
+          destinatario: comando.wallet,
+          concepto: `Pago por voz - ${comando.nombre}`
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error('❌ Error del servidor:', errorData);
+        throw new Error('Error al crear el pago');
+      }
+
+      const data = await response.json();
+      console.log('✅ Respuesta del servidor:', data);
+      
+      setGrantUrl(data.url);
+      setEsperandoAutorizacion(true);
+      setShowConfirm(false);
+      setProcesandoPago(false); // Importante: liberar el estado aquí
+      
+      hablar("Pago iniciado. Por favor autoriza la transacción en el enlace.");
+      
+    } catch (err) {
+      console.error('Error creando pago:', err);
+      setError("No se pudo crear el pago. Verifica tu conexión.");
+      hablar("Error al crear el pago. Por favor intenta de nuevo.");
+      setProcesandoPago(false);
+    }
+  };
+
+  // Función para finalizar el pago
+  const finalizarPago = async () => {
+    setProcesandoPago(true);
+    setError("");
+    
+    try {
+      hablar("Finalizando pago");
+      
+      const response = await fetch(`${API_URL}/finalizar-pago`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al finalizar el pago');
+      }
+
+      const data = await response.json();
       
       // Agregar al historial
-      setHistorial(prev => [{
+      const nuevoPago = {
         id: Date.now(),
-        comando: comando.nombre,
-        monto: comando.monto,
-        fecha: new Date().toLocaleTimeString(),
-        icono: comando.icono
-      }, ...prev.slice(0, 9)]);
+        comando: comandoPendiente.nombre,
+        monto: comandoPendiente.monto,
+        wallet: comandoPendiente.wallet,
+        fecha: new Date().toLocaleTimeString('es-MX', { 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        }),
+        icono: comandoPendiente.icono
+      };
       
-      Alert.alert(
-        "Pago Iniciado 🚀",
-        `${comando.icono} ${comando.nombre}\nMonto: $${comando.monto} MXN\n\n¿Deseas abrir el enlace de autorización?`,
-        [
-          { text: "Más tarde", style: "cancel" },
-          { text: "Abrir ahora", onPress: () => Linking.openURL(res.data.url) }
-        ]
-      );
+      setHistorial(prev => [nuevoPago, ...prev.slice(0, 9)]);
+      
+      // Limpiar estados
+      setPagoExitoso(true);
+      setEsperandoAutorizacion(false);
+      setGrantUrl(null);
+      
+      hablar(`Pago completado exitosamente. Se enviaron ${comandoPendiente.monto} pesos a ${comandoPendiente.nombre}`);
+      
+      // Reset después de 3 segundos
+      setTimeout(() => {
+        setPagoExitoso(false);
+        setComandoDetectado(null);
+        setComandoPendiente(null);
+        setTextoReconocido("");
+        setProcesandoPago(false);
+      }, 3000);
+      
     } catch (err) {
-      console.error(err);
-      Alert.alert("Error", "No se pudo procesar el pago. Verifica tu conexión.");
-    } finally {
-      setLoading(false);
+      console.error('Error finalizando pago:', err);
+      setError("No se pudo finalizar el pago. Intenta de nuevo.");
+      hablar("Error al finalizar el pago. Por favor intenta de nuevo.");
+      setProcesandoPago(false);
     }
   };
 
-  const finalizarPago = async () => {
-    setLoading(true);
-    try {
-      await axios.post(`${API_URL}/finalizar-pago`);
-      
-      Alert.alert(
-        "¡Pago Completado! ✅",
-        "El pago se realizó correctamente.",
-        [
-          {
-            text: "Aceptar",
-            onPress: () => {
-              setGrantUrl(null);
-              setComandoDetectado(null);
-              setTextoReconocido("");
-            }
-          }
-        ]
-      );
-    } catch (err) {
-      console.error(err);
-      Alert.alert("Error", "No se pudo finalizar el pago.");
-    } finally {
-      setLoading(false);
-    }
+  const confirmarPago = () => {
+    if (!comandoPendiente) return;
+    crearPago(comandoPendiente);
   };
 
-  const seleccionarComandoManual = (comando) => {
-    setShowComandos(false);
+  const cancelarPago = () => {
+    setShowConfirm(false);
+    setEsperandoAutorizacion(false);
+    setGrantUrl(null);
+    setComandoPendiente(null);
+    setComandoDetectado(null);
+    setProcesandoPago(false);
+    hablar("Pago cancelado");
+  };
+
+  const seleccionarComando = (comando) => {
+    setShowModal(false);
     setTextoReconocido(comando.patrones[0]);
     setComandoDetectado(comando);
-    
-    Alert.alert(
-      "Comando Seleccionado",
-      `${comando.icono} ${comando.nombre}\nMonto: $${comando.monto} MXN\n\n¿Deseas procesar este pago?`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        { text: "Confirmar", onPress: () => ejecutarComando(comando) }
-      ]
-    );
+    setComandoPendiente(comando);
+    setShowConfirm(true);
+  };
+
+  const abrirAutorizacion = () => {
+    if (grantUrl) {
+      window.open(grantUrl, '_blank');
+      hablar("Abriendo enlace de autorización. Cuando termines, regresa aquí para finalizar.");
+    }
   };
 
   return (
-    <View style={styles.container}>
+    <div style={styles.container}>
       {/* Header */}
-      <View style={styles.headerContainer}>
-        <FontAwesome name="microphone" size={40} color="#007AFF" />
-        <Text style={styles.headerTitle}>Asistente de Voz</Text>
-        <Text style={styles.headerSubtitle}>
-          {voiceDisponible ? "Di un comando o selecciona de la lista" : "Selecciona un comando de la lista"}
-        </Text>
-      </View>
+      <div style={styles.header}>
+        <h1 style={styles.headerTitle}>🎤 Asistente de Pagos por Voz</h1>
+        <p style={styles.headerSubtitle}>
+          {speechReady ? "Di un comando o selecciona de la lista" : "Inicializando..."}
+        </p>
+      </div>
 
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Botón de Voz Principal */}
-        {voiceDisponible && (
-          <View style={styles.micContainer}>
-            <TouchableOpacity
-              style={[
-                styles.micButton,
-                escuchando && styles.micButtonActive,
-                loading && styles.micButtonDisabled
-              ]}
-              onPress={escuchando ? detenerEscucha : iniciarEscucha}
-              disabled={loading}
-              activeOpacity={0.7}
-            >
-              {loading ? (
-                <ActivityIndicator size="large" color="#fff" />
-              ) : (
-                <>
-                  <FontAwesome 
-                    name={escuchando ? "stop-circle" : "microphone"} 
-                    size={60} 
-                    color="#fff" 
-                  />
-                  {escuchando && (
-                    <>
-                      <View style={styles.pulseRing} />
-                      <View style={[styles.pulseRing, styles.pulseRing2]} />
-                    </>
-                  )}
-                </>
-              )}
-            </TouchableOpacity>
-            <Text style={styles.micInstruccion}>
-              {loading ? "Procesando..." : escuchando ? "Escuchando... (toca para detener)" : "Toca para hablar"}
-            </Text>
-          </View>
+      <div style={styles.content}>
+        {/* Error */}
+        {error && (
+          <div style={styles.errorBox}>
+            <span style={styles.errorIcon}>⚠️</span>
+            <p style={styles.errorText}>{error}</p>
+          </div>
         )}
 
-        {/* Alerta si Voice no está disponible */}
-        {!voiceDisponible && (
-          <View style={styles.alertBox}>
-            <FontAwesome name="exclamation-triangle" size={24} color="#ffc107" />
-            <Text style={styles.alertText}>
-              Reconocimiento de voz no disponible.{'\n'}
-              Usa la selección manual de comandos.
-            </Text>
-          </View>
+        {/* Pago Exitoso */}
+        {pagoExitoso && (
+          <div style={styles.successBox}>
+            <span style={styles.successIcon}>✅</span>
+            <div>
+              <p style={styles.successTitle}>¡Pago Completado!</p>
+              <p style={styles.successText}>
+                ${comandoPendiente?.monto} MXN enviados a {comandoPendiente?.nombre}
+              </p>
+            </div>
+          </div>
         )}
 
-        {/* Texto Reconocido */}
-        {textoReconocido && !escuchando && textoReconocido !== "Escuchando..." && (
-          <View style={styles.textoReconocidoContainer}>
-            <FontAwesome name="quote-left" size={16} color="#007AFF" />
-            <Text style={styles.textoReconocido}>{textoReconocido}</Text>
-          </View>
+        {/* Botón Micrófono */}
+        <div style={styles.micContainer}>
+          <button
+            style={{
+              ...styles.micButton,
+              ...(escuchando ? styles.micButtonActive : {}),
+              ...(!speechReady || procesandoPago ? styles.micButtonDisabled : {})
+            }}
+            onClick={escuchando ? detenerEscucha : iniciarEscucha}
+            disabled={!speechReady || procesandoPago}
+          >
+            <span style={styles.micIcon}>
+              {escuchando ? "⏹️" : "🎤"}
+            </span>
+          </button>
+          <p style={styles.micText}>
+            {!speechReady 
+              ? "Inicializando..." 
+              : procesandoPago
+                ? "Procesando pago..."
+                : escuchando 
+                  ? "Escuchando... (toca para detener)" 
+                  : "Toca para hablar"}
+          </p>
+        </div>
+
+        {/* Texto Parcial */}
+        {parcial && escuchando && (
+          <div style={styles.parcialBox}>
+            <p style={styles.parcialLabel}>Escuchando:</p>
+            <p style={styles.parcialText}>{parcial}</p>
+          </div>
         )}
 
-        {/* Resultados Parciales (mientras escucha) */}
-        {escuchando && resultadosParciales.length > 0 && (
-          <View style={styles.resultadosParcialesContainer}>
-            <Text style={styles.resultadosParcialesText}>
-              {resultadosParciales[0]}
-            </Text>
-          </View>
+        {/* Texto Reconocido Final */}
+        {textoReconocido && !escuchando && (
+          <div style={styles.transcriptBox}>
+            <p style={styles.transcriptLabel}>Dijiste:</p>
+            <p style={styles.transcriptText}>"{textoReconocido}"</p>
+          </div>
         )}
 
         {/* Comando Detectado */}
-        {comandoDetectado && !grantUrl && (
-          <View style={styles.comandoCard}>
-            <Text style={styles.comandoIcono}>{comandoDetectado.icono}</Text>
-            <Text style={styles.comandoNombre}>{comandoDetectado.nombre}</Text>
-            <Text style={styles.comandoDescripcion}>{comandoDetectado.descripcion}</Text>
-            <Text style={styles.comandoMonto}>${comandoDetectado.monto} MXN</Text>
-          </View>
+        {comandoDetectado && !esperandoAutorizacion && !pagoExitoso && (
+          <div style={styles.commandCard}>
+            <span style={styles.commandIcon}>{comandoDetectado.icono}</span>
+            <h3 style={styles.commandName}>{comandoDetectado.nombre}</h3>
+            <p style={styles.commandAmount}>${comandoDetectado.monto} MXN</p>
+            <p style={styles.commandWallet}>{comandoDetectado.wallet}</p>
+          </div>
+        )}
+
+        {/* Proceso de Autorización */}
+        {esperandoAutorizacion && grantUrl && (
+          <div style={styles.authContainer}>
+            <div style={styles.alertBox}>
+              <span style={styles.alertIcon}>⏳</span>
+              <div style={{flex: 1}}>
+                <p style={styles.alertText}>
+                  Pago pendiente de autorización
+                </p>
+                <p style={{...styles.alertText, fontSize: '12px', marginTop: '5px'}}>
+                  1. Abre el enlace de autorización<br/>
+                  2. Autoriza el pago<br/>
+                  3. Regresa y presiona "Finalizar Pago"
+                </p>
+              </div>
+            </div>
+
+            <button
+              style={styles.linkButton}
+              onClick={abrirAutorizacion}
+            >
+              <span style={styles.linkButtonIcon}>🔗</span>
+              <span style={styles.linkButtonText}>Abrir enlace de autorización</span>
+            </button>
+
+            <div style={styles.divider}>
+              <div style={styles.dividerLine}></div>
+              <span style={styles.dividerText}>¿Ya autorizaste?</span>
+              <div style={styles.dividerLine}></div>
+            </div>
+
+            <button
+              style={{...styles.finalizeButton, ...(procesandoPago ? styles.buttonDisabled : {})}}
+              onClick={finalizarPago}
+              disabled={procesandoPago}
+            >
+              {procesandoPago ? (
+                <span>⏳ Procesando...</span>
+              ) : (
+                <span>✅ Finalizar Pago</span>
+              )}
+            </button>
+
+            <button
+              style={styles.cancelLink}
+              onClick={cancelarPago}
+              disabled={procesandoPago}
+            >
+              Cancelar pago
+            </button>
+          </div>
         )}
 
         {/* Botón Ver Comandos */}
-        <TouchableOpacity
-          style={styles.verComandosButton}
-          onPress={() => setShowComandos(true)}
-          disabled={loading}
-        >
-          <FontAwesome name="list" size={18} color="#007AFF" />
-          <Text style={styles.verComandosText}>Ver todos los comandos</Text>
-        </TouchableOpacity>
-
-        {/* Sección de Autorización */}
-        {grantUrl && (
-          <View style={styles.autorizacionContainer}>
-            <View style={styles.alertBox}>
-              <FontAwesome name="exclamation-circle" size={24} color="#ffc107" />
-              <Text style={styles.alertText}>
-                Pago pendiente de autorización
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.linkButton}
-              onPress={() => Linking.openURL(grantUrl)}
-              disabled={loading}
-            >
-              <FontAwesome name="external-link" size={18} color="#007AFF" />
-              <Text style={[styles.buttonText, { color: "#007AFF" }]}>
-                Abrir enlace de autorización
-              </Text>
-            </TouchableOpacity>
-
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>Ya autorizaste?</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.button, styles.buttonSuccess]}
-              onPress={finalizarPago}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <FontAwesome name="check-circle" size={18} color="#fff" />
-                  <Text style={styles.buttonText}>Finalizar Pago</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Historial */}
-        {historial.length > 0 && (
-          <View style={styles.historialContainer}>
-            <Text style={styles.historialTitle}>Historial Reciente</Text>
-            {historial.map(item => (
-              <View key={item.id} style={styles.historialItem}>
-                <Text style={styles.historialIcono}>{item.icono}</Text>
-                <View style={styles.historialInfo}>
-                  <Text style={styles.historialComando}>{item.comando}</Text>
-                  <Text style={styles.historialFecha}>{item.fecha}</Text>
-                </View>
-                <Text style={styles.historialMonto}>${item.monto}</Text>
-              </View>
-            ))}
-          </View>
+        {!esperandoAutorizacion && !pagoExitoso && (
+          <button
+            style={{...styles.listButton, ...(procesandoPago ? styles.buttonDisabled : {})}}
+            onClick={() => setShowModal(true)}
+            disabled={procesandoPago}
+          >
+            <span style={styles.listButtonText}>📋 Ver opciones de pago</span>
+          </button>
         )}
 
         {/* Información */}
-        <View style={styles.infoContainer}>
-          <FontAwesome name="info-circle" size={16} color="#666" />
-          <Text style={styles.infoText}>
-            {voiceDisponible 
-              ? "Puedes decir comandos como 'Pagar Netflix', 'Pagar luz' o 'Transferir a receptor saga'"
-              : "Selecciona un comando de la lista para realizar pagos rápidos"}
-          </Text>
-        </View>
-      </ScrollView>
+        <div style={styles.infoBox}>
+          <span style={styles.infoIcon}>💡</span>
+          <p style={styles.infoText}>
+            Di: "Transferir a Eduardo" o "Pagar streaming"
+          </p>
+        </div>
+
+        {/* Historial */}
+        {historial.length > 0 && (
+          <div style={styles.historyContainer}>
+            <h3 style={styles.historyTitle}>📜 Historial de Pagos</h3>
+            {historial.map(item => (
+              <div key={item.id} style={styles.historyItem}>
+                <span style={styles.historyIcon}>{item.icono}</span>
+                <div style={styles.historyInfo}>
+                  <p style={styles.historyName}>{item.comando}</p>
+                  <p style={styles.historyWallet}>{item.wallet}</p>
+                  <p style={styles.historyDate}>{item.fecha}</p>
+                </div>
+                <span style={styles.historyAmount}>${item.monto}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Modal de Comandos */}
-      <Modal
-        visible={showComandos}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowComandos(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Comandos Disponibles</Text>
-              <TouchableOpacity onPress={() => setShowComandos(false)}>
-                <FontAwesome name="times" size={24} color="#666" />
-              </TouchableOpacity>
-            </View>
+      {showModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowModal(false)}>
+          <div style={styles.modalContainer} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h2 style={styles.modalTitle}>Opciones de Pago</h2>
+              <button 
+                style={styles.closeButton}
+                onClick={() => setShowModal(false)}
+              >
+                ✕
+              </button>
+            </div>
 
-            <ScrollView style={styles.comandosList}>
+            <div style={styles.modalScroll}>
               {COMANDOS.map((comando) => (
-                <TouchableOpacity
+                <button
                   key={comando.id}
-                  style={styles.comandoItem}
-                  onPress={() => seleccionarComandoManual(comando)}
+                  style={styles.modalItem}
+                  onClick={() => seleccionarComando(comando)}
                 >
-                  <Text style={styles.comandoItemIcono}>{comando.icono}</Text>
-                  <View style={styles.comandoItemInfo}>
-                    <Text style={styles.comandoItemNombre}>{comando.nombre}</Text>
-                    <Text style={styles.comandoItemDescripcion}>{comando.descripcion}</Text>
-                    <Text style={styles.comandoItemPatron}>
+                  <span style={styles.modalItemIcon}>{comando.icono}</span>
+                  <div style={styles.modalItemInfo}>
+                    <p style={styles.modalItemName}>{comando.nombre}</p>
+                    <p style={styles.modalItemWallet}>{comando.wallet}</p>
+                    <p style={styles.modalItemPattern}>
                       💬 "{comando.patrones[0]}"
-                    </Text>
-                  </View>
-                  <View style={styles.comandoItemMonto}>
-                    <Text style={styles.comandoItemMontoTexto}>${comando.monto}</Text>
-                    <FontAwesome name="chevron-right" size={16} color="#007AFF" />
-                  </View>
-                </TouchableOpacity>
+                    </p>
+                  </div>
+                  <div style={styles.modalItemRight}>
+                    <span style={styles.modalItemAmount}>${comando.monto}</span>
+                    <span style={styles.modalItemArrow}>→</span>
+                  </div>
+                </button>
               ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-    </View>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmación */}
+      {showConfirm && comandoPendiente && (
+        <div style={styles.modalOverlay} onClick={cancelarPago}>
+          <div style={styles.confirmContainer} onClick={(e) => e.stopPropagation()}>
+            <h2 style={styles.confirmTitle}>💳 Confirmar Pago</h2>
+            <div style={styles.confirmContent}>
+              <span style={styles.confirmIcon}>{comandoPendiente.icono}</span>
+              <p style={styles.confirmName}>{comandoPendiente.nombre}</p>
+              <p style={styles.confirmWallet}>{comandoPendiente.wallet}</p>
+              <p style={styles.confirmAmount}>${comandoPendiente.monto} MXN</p>
+            </div>
+            <div style={styles.confirmButtons}>
+              <button 
+                style={{...styles.confirmButton, ...styles.cancelButton}}
+                onClick={cancelarPago}
+                disabled={procesandoPago}
+              >
+                Cancelar
+              </button>
+              <button 
+                style={{...styles.confirmButton, ...styles.acceptButton, ...(procesandoPago ? styles.buttonDisabled : {})}}
+                onClick={confirmarPago}
+                disabled={procesandoPago}
+              >
+                {procesandoPago ? "Procesando..." : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = {
   container: {
-    flex: 1,
-    backgroundColor: "#f2f2f2"
+    minHeight: '100vh',
+    backgroundColor: '#f5f5f5',
+    display: 'flex',
+    flexDirection: 'column',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
   },
-  headerContainer: {
-    backgroundColor: "#fff",
-    padding: 30,
-    alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0"
+  header: {
+    backgroundColor: '#fff',
+    padding: '25px',
+    textAlign: 'center',
+    borderBottom: '1px solid #e0e0e0',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#333",
-    marginTop: 15,
-    marginBottom: 5
+    fontSize: '26px',
+    fontWeight: 'bold',
+    color: '#333',
+    margin: '0 0 8px 0'
   },
   headerSubtitle: {
-    fontSize: 14,
-    color: "#666",
-    textAlign: "center"
+    fontSize: '14px',
+    color: '#666',
+    margin: 0
   },
-  scrollView: {
-    flex: 1
+  content: {
+    flex: 1,
+    padding: '20px',
+    overflowY: 'auto',
+    WebkitOverflowScrolling: 'touch'
   },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 30
+  errorBox: {
+    display: 'flex',
+    alignItems: 'center',
+    backgroundColor: '#fee',
+    padding: '15px',
+    borderRadius: '10px',
+    marginBottom: '20px',
+    borderLeft: '4px solid #dc3545'
+  },
+  errorIcon: {
+    fontSize: '24px',
+    marginRight: '12px'
+  },
+  errorText: {
+    flex: 1,
+    fontSize: '14px',
+    color: '#721c24',
+    margin: 0
+  },
+  successBox: {
+    display: 'flex',
+    alignItems: 'center',
+    backgroundColor: '#d4edda',
+    padding: '15px',
+    borderRadius: '10px',
+    marginBottom: '20px',
+    borderLeft: '4px solid #28a745'
+  },
+  successIcon: {
+    fontSize: '32px',
+    marginRight: '15px'
+  },
+  successTitle: {
+    fontSize: '16px',
+    fontWeight: 'bold',
+    color: '#155724',
+    margin: '0 0 5px 0'
+  },
+  successText: {
+    fontSize: '14px',
+    color: '#155724',
+    margin: 0
   },
   micContainer: {
-    alignItems: "center",
-    marginVertical: 30
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    margin: '40px 0'
   },
   micButton: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: "#007AFF",
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-    position: "relative"
+    width: '130px',
+    height: '130px',
+    borderRadius: '65px',
+    backgroundColor: '#007AFF',
+    border: 'none',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    cursor: 'pointer',
+    boxShadow: '0 8px 16px rgba(0, 122, 255, 0.4)',
+    transition: 'all 0.3s ease',
+    WebkitTapHighlightColor: 'transparent'
   },
   micButtonActive: {
-    backgroundColor: "#dc3545"
+    backgroundColor: '#dc3545',
+    boxShadow: '0 8px 16px rgba(220, 53, 69, 0.4)'
   },
   micButtonDisabled: {
-    backgroundColor: "#999"
+    backgroundColor: '#999',
+    cursor: 'not-allowed',
+    boxShadow: 'none'
   },
-  pulseRing: {
-    position: "absolute",
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    borderWidth: 3,
-    borderColor: "#dc3545",
-    opacity: 0.6
+  micIcon: {
+    fontSize: '65px'
   },
-  pulseRing2: {
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    opacity: 0.3
+  micText: {
+    marginTop: '20px',
+    fontSize: '16px',
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center'
   },
-  micInstruccion: {
-    marginTop: 20,
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
-    textAlign: "center",
-    paddingHorizontal: 20
+  parcialBox: {
+    backgroundColor: '#fff3cd',
+    padding: '18px',
+    borderRadius: '12px',
+    marginBottom: '15px',
+    borderLeft: '4px solid #ffc107'
+  },
+  parcialLabel: {
+    fontSize: '12px',
+    color: '#856404',
+    fontWeight: '600',
+    margin: '0 0 5px 0'
+  },
+  parcialText: {
+    fontSize: '16px',
+    color: '#856404',
+    fontWeight: '500',
+    margin: 0
+  },
+  transcriptBox: {
+    backgroundColor: '#e3f2fd',
+    padding: '18px',
+    borderRadius: '12px',
+    marginBottom: '20px',
+    borderLeft: '4px solid #007AFF'
+  },
+  transcriptLabel: {
+    fontSize: '12px',
+    color: '#0056b3',
+    fontWeight: '600',
+    margin: '0 0 5px 0'
+  },
+  transcriptText: {
+    fontSize: '16px',
+    color: '#333',
+    fontStyle: 'italic',
+    margin: 0
+  },
+  commandCard: {
+    backgroundColor: '#fff',
+    borderRadius: '15px',
+    padding: '30px',
+    marginBottom: '20px',
+    textAlign: 'center',
+    border: '2px solid #007AFF',
+    boxShadow: '0 4px 8px rgba(0,0,0,0.15)'
+  },
+  commandIcon: {
+    fontSize: '60px',
+    display: 'block',
+    marginBottom: '15px'
+  },
+  commandName: {
+    fontSize: '22px',
+    fontWeight: 'bold',
+    color: '#333',
+    margin: '0 0 8px 0'
+  },
+  commandAmount: {
+    fontSize: '32px',
+    fontWeight: 'bold',
+    color: '#007AFF',
+    margin: '0 0 8px 0'
+  },
+  commandWallet: {
+    fontSize: '12px',
+    color: '#666',
+    margin: 0,
+    wordBreak: 'break-all'
+  },
+  authContainer: {
+    backgroundColor: '#fff',
+    borderRadius: '15px',
+    padding: '20px',
+    marginBottom: '20px'
   },
   alertBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff3cd",
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 15,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: "#ffc107"
+    display: 'flex',
+    alignItems: 'center',
+    backgroundColor: '#fff3cd',
+    padding: '15px',
+    borderRadius: '10px',
+    marginBottom: '15px',
+    borderLeft: '4px solid #ffc107'
+  },
+  alertIcon: {
+    fontSize: '24px',
+    marginRight: '12px'
   },
   alertText: {
     flex: 1,
-    fontSize: 14,
-    color: "#856404",
-    fontWeight: "500"
-  },
-  textoReconocidoContainer: {
-    backgroundColor: "#e3f2fd",
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 20,
-    borderLeftWidth: 4,
-    borderLeftColor: "#007AFF",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10
-  },
-  textoReconocido: {
-    flex: 1,
-    fontSize: 16,
-    color: "#333",
-    fontStyle: "italic"
-  },
-  resultadosParcialesContainer: {
-    backgroundColor: "#fff",
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 15,
-    borderWidth: 2,
-    borderColor: "#dc3545",
-    borderStyle: "dashed"
-  },
-  resultadosParcialesText: {
-    fontSize: 16,
-    color: "#dc3545",
-    fontWeight: "600",
-    textAlign: "center"
-  },
-  comandoCard: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 25,
-    marginBottom: 20,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    borderWidth: 2,
-    borderColor: "#007AFF"
-  },
-  comandoIcono: {
-    fontSize: 50,
-    marginBottom: 10
-  },
-  comandoNombre: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 5
-  },
-  comandoDescripcion: {
-    fontSize: 14,
-    color: "#666",
-    textAlign: "center",
-    marginBottom: 10
-  },
-  comandoMonto: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#007AFF"
-  },
-  verComandosButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#fff",
-    borderWidth: 2,
-    borderColor: "#007AFF",
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 20,
-    gap: 10
-  },
-  verComandosText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#007AFF"
-  },
-  autorizacionContainer: {
-    marginTop: 10
+    fontSize: '14px',
+    color: '#856404',
+    fontWeight: '500',
+    margin: 0
   },
   linkButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#fff",
-    borderWidth: 2,
-    borderColor: "#007AFF",
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 15,
-    gap: 10
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '10px',
+    padding: '15px',
+    backgroundColor: '#007AFF',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '10px',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    marginBottom: '15px',
+    WebkitTapHighlightColor: 'transparent'
   },
-  button: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 16,
-    borderRadius: 8,
-    gap: 10
+  linkButtonIcon: {
+    fontSize: '20px'
   },
-  buttonSuccess: {
-    backgroundColor: "#28a745"
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold"
+  linkButtonText: {
+    fontSize: '16px'
   },
   divider: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 15
+    display: 'flex',
+    alignItems: 'center',
+    margin: '20px 0'
   },
   dividerLine: {
     flex: 1,
-    height: 1,
-    backgroundColor: "#ddd"
+    height: '1px',
+    backgroundColor: '#ddd'
   },
   dividerText: {
-    marginHorizontal: 10,
-    fontSize: 12,
-    color: "#666"
+    margin: '0 10px',
+    fontSize: '12px',
+    color: '#666'
   },
-  historialContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 15,
-    marginTop: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3
+  finalizeButton: {
+    width: '100%',
+    padding: '15px',
+    backgroundColor: '#28a745',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '10px',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    marginBottom: '10px',
+    WebkitTapHighlightColor: 'transparent'
   },
-  historialTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 15
+  cancelLink: {
+    width: '100%',
+    padding: '10px',
+    background: 'none',
+    border: 'none',
+    color: '#dc3545',
+    fontSize: '14px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    textAlign: 'center',
+    WebkitTapHighlightColor: 'transparent'
   },
-  historialItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0"
+  listButton: {
+    width: '100%',
+    backgroundColor: '#fff',
+    border: '2px solid #007AFF',
+    padding: '18px',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    marginBottom: '20px',
+    WebkitTapHighlightColor: 'transparent'
   },
-  historialIcono: {
-    fontSize: 24,
-    marginRight: 12
+  listButtonText: {
+    fontSize: '16px',
+    fontWeight: '600',
+    color: '#007AFF'
   },
-  historialInfo: {
-    flex: 1
+  buttonDisabled: {
+    opacity: 0.5,
+    cursor: 'not-allowed'
   },
-  historialComando: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 2
+  infoBox: {
+    display: 'flex',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: '15px',
+    borderRadius: '10px',
+    marginBottom: '20px'
   },
-  historialFecha: {
-    fontSize: 12,
-    color: "#999"
-  },
-  historialMonto: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#007AFF"
-  },
-  infoContainer: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: "#fff",
-    padding: 15,
-    marginTop: 20,
-    borderRadius: 8,
-    gap: 10
+  infoIcon: {
+    fontSize: '24px',
+    marginRight: '12px'
   },
   infoText: {
     flex: 1,
-    fontSize: 12,
-    color: "#666",
-    lineHeight: 18
+    fontSize: '13px',
+    color: '#666',
+    lineHeight: '20px',
+    margin: 0
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end"
+  historyContainer: {
+    backgroundColor: '#fff',
+    borderRadius: '15px',
+    padding: '18px',
+    marginTop: '10px',
+    marginBottom: '20px'
   },
-  modalContainer: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "80%",
-    paddingBottom: 20
+  historyTitle: {
+    fontSize: '17px',
+    fontWeight: 'bold',
+    color: '#333',
+    margin: '0 0 15px 0'
   },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0"
+  historyItem: {
+    display: 'flex',
+    alignItems: 'center',
+    paddingTop: '14px',
+    paddingBottom: '14px',
+    borderBottom: '1px solid #f0f0f0'
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#333"
+  historyIcon: {
+    fontSize: '28px',
+    marginRight: '15px'
   },
-  comandosList: {
-    paddingHorizontal: 20
-  },
-  comandoItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0"
-  },
-  comandoItemIcono: {
-    fontSize: 32,
-    marginRight: 15
-  },
-  comandoItemInfo: {
+  historyInfo: {
     flex: 1
   },
-  comandoItemNombre: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 3
+  historyName: {
+    fontSize: '15px',
+    fontWeight: '600',
+    color: '#333',
+    margin: '0 0 3px 0'
   },
-  comandoItemDescripcion: {
-    fontSize: 12,
-    color: "#666",
-    marginBottom: 3
+  historyWallet: {
+    fontSize: '11px',
+    color: '#999',
+    margin: '0 0 3px 0',
+    wordBreak: 'break-all'
   },
-  comandoItemPatron: {
-    fontSize: 11,
-    color: "#007AFF",
-    fontStyle: "italic"
+  historyDate: {
+    fontSize: '12px',
+    color: '#999',
+    margin: 0
   },
-  comandoItemMonto: {
-    alignItems: "flex-end"
+  historyAmount: {
+    fontSize: '17px',
+    fontWeight: 'bold',
+    color: '#007AFF'
   },
-  comandoItemMontoTexto: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#007AFF",
-    marginBottom: 5
+  modalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    zIndex: 1000
+  },
+  modalContainer: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: '25px',
+    borderTopRightRadius: '25px',
+    maxHeight: '85vh',
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column'
+  },
+  modalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '22px',
+    borderBottom: '1px solid #e0e0e0'
+  },
+  modalTitle: {
+    fontSize: '20px',
+    fontWeight: 'bold',
+    color: '#333',
+    margin: 0
+  },
+  closeButton: {
+    fontSize: '28px',
+    color: '#666',
+    border: 'none',
+    background: 'none',
+    cursor: 'pointer',
+    padding: '0',
+    lineHeight: '1',
+    WebkitTapHighlightColor: 'transparent'
+  },
+  modalScroll: {
+    padding: '20px',
+    overflowY: 'auto',
+    flex: 1,
+    WebkitOverflowScrolling: 'touch'
+  },
+  modalItem: {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '16px 0',
+    borderBottom: '1px solid #f0f0f0',
+    background: 'none',
+    border: 'none',
+    borderBottom: '1px solid #f0f0f0',
+    width: '100%',
+    textAlign: 'left',
+    cursor: 'pointer',
+    WebkitTapHighlightColor: 'transparent'
+  },
+  modalItemIcon: {
+    fontSize: '36px',
+    marginRight: '16px'
+  },
+  modalItemInfo: {
+    flex: 1
+  },
+  modalItemName: {
+    fontSize: '17px',
+    fontWeight: 'bold',
+    color: '#333',
+    margin: '0 0 4px 0'
+  },
+  modalItemWallet: {
+    fontSize: '11px',
+    color: '#666',
+    margin: '0 0 4px 0',
+    wordBreak: 'break-all'
+  },
+  modalItemPattern: {
+    fontSize: '13px',
+    color: '#007AFF',
+    fontStyle: 'italic',
+    margin: 0
+  },
+  modalItemRight: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-end'
+  },
+  modalItemAmount: {
+    fontSize: '18px',
+    fontWeight: 'bold',
+    color: '#007AFF',
+    marginBottom: '4px'
+  },
+  modalItemArrow: {
+    fontSize: '20px',
+    color: '#007AFF'
+  },
+  confirmContainer: {
+    backgroundColor: '#fff',
+    borderRadius: '20px',
+    padding: '30px',
+    margin: '20px',
+    maxWidth: '400px',
+    width: 'calc(100% - 40px)'
+  },
+  confirmTitle: {
+    fontSize: '22px',
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+    margin: '0 0 20px 0'
+  },
+  confirmContent: {
+    textAlign: 'center',
+    marginBottom: '25px'
+  },
+  confirmIcon: {
+    fontSize: '70px',
+    display: 'block',
+    marginBottom: '15px'
+  },
+  confirmName: {
+    fontSize: '20px',
+    fontWeight: 'bold',
+    color: '#333',
+    margin: '0 0 8px 0'
+  },
+  confirmWallet: {
+    fontSize: '12px',
+    color: '#666',
+    margin: '0 0 10px 0',
+    wordBreak: 'break-all'
+  },
+  confirmAmount: {
+    fontSize: '28px',
+    fontWeight: 'bold',
+    color: '#007AFF',
+    margin: 0
+  },
+  confirmButtons: {
+    display: 'flex',
+    gap: '12px'
+  },
+  confirmButton: {
+    flex: 1,
+    padding: '15px',
+    borderRadius: '12px',
+    border: 'none',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    WebkitTapHighlightColor: 'transparent'
+  },
+  cancelButton: {
+    backgroundColor: '#f0f0f0',
+    color: '#333'
+  },
+  acceptButton: {
+    backgroundColor: '#007AFF',
+    color: '#fff'
   }
-});
+};
