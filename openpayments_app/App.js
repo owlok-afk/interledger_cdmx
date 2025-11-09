@@ -13,12 +13,17 @@ import { FontAwesome } from "@expo/vector-icons";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
-// Pantallas
+// Pantallas existentes
 import TransferenciasScreen from "./screens/TransferenciasScreen";
 import PagosQRScreen from "./screens/PagosQRScreen";
 import DonarScreen from "./screens/DonarScreen";
 import ProgramarScreen from "./screens/ProgramarScreen";
 import AsistenteScreen from "./screens/AsistenteScreen";
+
+// Nuevas pantallas de Streamers
+import StreamersListScreen from "./screens/StreamersListScreen";
+import StreamingScreen from "./screens/StreamingScreen";
+import DonarStreamerScreen from "./screens/DonarStreamerScreen";
 
 const Stack = createNativeStackNavigator();
 const API_URL = "http://192.168.1.229:4000";
@@ -193,6 +198,14 @@ function HomeScreen({ navigation, onLogout }) {
       screen: "Asistente",
       description: "Paga por voz"
     },
+    {
+      id: 6,
+      name: "Streamers",
+      icon: "video-camera",
+      color: "#9147ff",
+      screen: "StreamersList",
+      description: "Apoya creadores"
+    },
   ];
 
   return (
@@ -326,11 +339,30 @@ export default function App() {
         >
           {(props) => <HomeScreen {...props} onLogout={() => setIsLoggedIn(false)} />}
         </Stack.Screen>
+        
+        {/* Pantallas originales */}
         <Stack.Screen name="Transferencias" component={TransferenciasScreen} />
         <Stack.Screen name="PagosQR" component={PagosQRScreen} options={{ title: "Pagos con QR" }} />
         <Stack.Screen name="Donar" component={DonarScreen} />
         <Stack.Screen name="Programar" component={ProgramarScreen} options={{ title: "Programar Pagos" }} />
         <Stack.Screen name="Asistente" component={AsistenteScreen} options={{ title: "Asistente de Voz" }} />
+        
+        {/* Nuevas pantallas de Streamers */}
+        <Stack.Screen 
+          name="StreamersList" 
+          component={StreamersListScreen} 
+          options={{ title: "Apoyo a Streamers" }} 
+        />
+        <Stack.Screen 
+          name="Streaming" 
+          component={StreamingScreen} 
+          options={{ title: "Streamers" }} 
+        />
+        <Stack.Screen 
+          name="DonarStreamer" 
+          component={DonarStreamerScreen} 
+          options={{ title: "Donar a Streamer" }} 
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );
